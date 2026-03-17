@@ -1,117 +1,55 @@
 pipeline {
-    agent {
-        kubernetes {
-            label 'sample-app'
-            yaml """
-apiVersion: v1
-kind: Pod
-metadata:
-  labels:
-    component: ci
-spec:
-  containers:
-  - name: gcloud
-    image: google/cloud-sdk:latest
-    command:
-    - cat
-    tty: true
-"""
-        }
-    }
-
-    tools {
-        maven 'maven'
-    }
-
+    agent any
     environment {
-        REPO_PATH = credentials("repo_path")
-        APP_NAME = "binarycalculatorwebapp"
-        IMAGE_TAG = "${REPO_PATH}/${APP_NAME}"
-        CLUSTER = credentials("cluster_name")
-        CLUSTER_ZONE = credentials("cluster_zone")
+        PROJECT_ID = credentials('project_id')
+        CLUSTER_NAME = credentials('cluster_name')
+        CLUSTER_ZONE = credentials('cluster_zone')
+        REPO_PATH = credentials('repo_path')
     }
-
     stages {
-
-        stage('test') {
+        stage('Test') {
             steps {
-                sh 'mvn clean test -f ./BinaryCalculatorWebapp/pom.xml'
+                sh 'mvn test'
             }
         }
-
-        stage('build') {
+        stage('Build') {
             steps {
-                sh 'mvn clean package -DskipTests -f ./BinaryCalculatorWebapp/pom.xml'
+                sh 'mvn package -DskipTests'
             }
         }
-
-        stage('containerize') {
+        stage('Containerize') {
             steps {
-                withCredentials([
-                    string(credentialsId: 'project_id', variable: 'PROJECT_ID'),
-                    file(credentialsId: 'service_account', variable: 'SERVICE_ACCOUNT')
-                ]) {
-                    container('gcloud') {
-                        dir('BinaryCalculatorWebapp') {
-                            sh 'gcloud auth activate-service-account --key-file=$SERVICE_ACCOUNT'
-                            sh 'gcloud config set project $PROJECT_ID'
-                            sh 'gcloud builds submit -t $IMAGE_TAG --quiet'
-                        }
-                    }
+                withCredentials([file(credentialsId: 'service_account', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                    sh '''
+                        gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+                        gcloud config set project $PROJECT_ID
+                        gcloud builds submit --tag ${REPO_PATH}/binarycalculator:latest .
+                    '''
                 }
             }
         }
-
-        stage('deployment') {
+        stage('Deployment') {
             steps {
-                withCredentials([
-                    string(credentialsId: 'project_id', variable: 'PROJECT_ID'),
-                    file(credentialsId: 'service_account', variable: 'SERVICE_ACCOUNT')
-                ]) {
-                    container('gcloud') {
-                        dir('BinaryCalculatorWebapp') {
-                            sh 'gcloud auth activate-service-account --key-file=$SERVICE_ACCOUNT'
-                            sh 'gcloud config set project $PROJECT_ID'
-                            sh 'gcloud container clusters get-credentials $CLUSTER --zone=$CLUSTER_ZONE'
-
-                            script {
-                                try {
-                                    sh 'kubectl delete deployment binarycalculator-deployment'
-                                } catch (Exception e) {
-                                    echo "No previous deployment"
-                                }
-                            }
-
-                            sh 'kubectl create deployment binarycalculator-deployment --image=$IMAGE_TAG --port=8080'
-                        }
-                    }
+                withCredentials([file(credentialsId: 'service_account', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                    sh '''
+                        gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+                        gcloud config set project $PROJECT_ID
+                        gcloud container clusters get-credentials $CLUSTER_NAME --zone $CLUSTER_ZONE --project $PROJECT_ID
+                        kubectl set image deployment/binarycalculator binarycalculator=${REPO_PATH}/binarycalculator:latest || \
+                        kubectl create deployment binarycalculator --image=${REPO_PATH}/binarycalculator:latest
+                    '''
                 }
             }
         }
-
-        stage('service') {
+        stage('Service') {
             steps {
-                withCredentials([
-                    string(credentialsId: 'project_id', variable: 'PROJECT_ID'),
-                    file(credentialsId: 'service_account', variable: 'SERVICE_ACCOUNT')
-                ]) {
-                    container('gcloud') {
-                        dir('BinaryCalculatorWebapp') {
-                            sh 'gcloud auth activate-service-account --key-file=$SERVICE_ACCOUNT'
-                            sh 'gcloud config set project $PROJECT_ID'
-                            sh 'gcloud container clusters get-credentials $CLUSTER --zone=$CLUSTER_ZONE'
-
-                            script {
-                                try {
-                                    sh 'kubectl expose deployment binarycalculator-deployment --type=LoadBalancer --name=binarycalculator-service'
-                                } catch (Exception e) {
-                                    echo "Service already exists"
-                                }
-                            }
-
-                            sh "kubectl get service binarycalculator-service"
-                        }
-                    }
+                withCredentials([file(credentialsId: 'service_account', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                    sh '''
+                        gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+                        gcloud config set project $PROJECT_ID
+                        gcloud container clusters get-credentials $CLUSTER_NAME --zone $CLUSTER_ZONE --project $PROJECT_ID
+                        kubectl expose deployment binarycalculator --type=LoadBalancer --port=8080 --target-port=8080 || echo "Service already exists"
+                    '''
                 }
             }
         }
