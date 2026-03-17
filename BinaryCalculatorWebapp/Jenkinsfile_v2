@@ -31,7 +31,11 @@ pipeline {
     tools{
         maven 'maven'
     }
-    stages {
+    withCredentials([
+  string(credentialsId: 'project_id', variable: 'PROJECT_ID'),
+  file(credentialsId: 'service_account', variable: 'SERVICE_ACCOUNT')
+])    
+stages {
         stage ('test') {
             steps {
                 sh 'mvn clean test -f ./BinaryCalculatorWebapp/pom.xml'
@@ -48,7 +52,7 @@ pipeline {
                     dir('BinaryCalculatorWebapp'){
                         // set the credential for gcloud within the container
                         sh 'gcloud auth activate-service-account --key-file $SERVICE_ACCOUNT'
-                        sh 'gcloud config set project $PROJECT'
+                        sh 'gcloud config set project $PROJECT_ID'
                         sh 'gcloud builds submit -t $IMAGE_TAG --suppress-logs'
                     }
                 }
@@ -60,7 +64,7 @@ pipeline {
                     dir('BinaryCalculatorWebapp'){
                         // set the credential for gcloud and kubectl within the container
                         sh 'gcloud auth activate-service-account --key-file $SERVICE_ACCOUNT'
-                        sh 'gcloud config set project $PROJECT'
+                        sh 'gcloud config set project $PROJECT_ID'
                         sh 'gcloud container clusters get-credentials $CLUSTER --region=$CLUSTER_ZONE'
                         script{
                             try{
@@ -84,7 +88,7 @@ pipeline {
                     dir('BinaryCalculatorWebapp'){
                         // set the credential for gcloud and kubectl within the container
                         sh 'gcloud auth activate-service-account --key-file $SERVICE_ACCOUNT'
-                        sh 'gcloud config set project $PROJECT'
+                        sh 'gcloud config set project $PROJECT_ID'
                         sh 'gcloud container clusters get-credentials $CLUSTER --region=$CLUSTER_ZONE'
                         script{
                             try{
