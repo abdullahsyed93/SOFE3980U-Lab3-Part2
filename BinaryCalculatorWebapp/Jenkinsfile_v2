@@ -12,22 +12,28 @@ pipeline {
     stages {
         stage('Test') {
             steps {
-                sh 'mvn test'
+                dir('BinaryCalculatorWebapp') {
+                    sh 'mvn test'
+                }
             }
         }
         stage('Build') {
             steps {
-                sh 'mvn package -DskipTests'
+                dir('BinaryCalculatorWebapp') {
+                    sh 'mvn package -DskipTests'
+                }
             }
         }
         stage('Containerize') {
             steps {
-                withCredentials([file(credentialsId: 'service_account', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-                    sh '''
-                        gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
-                        gcloud config set project $PROJECT_ID
-                        gcloud builds submit --tag ${REPO_PATH}/binarycalculator:latest .
-                    '''
+                dir('BinaryCalculatorWebapp') {
+                    withCredentials([file(credentialsId: 'service_account', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                        sh '''
+                            gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+                            gcloud config set project $PROJECT_ID
+                            gcloud builds submit --tag ${REPO_PATH}/binarycalculator:latest .
+                        '''
+                    }
                 }
             }
         }
