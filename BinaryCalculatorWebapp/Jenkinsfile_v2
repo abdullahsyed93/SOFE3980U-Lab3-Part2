@@ -8,6 +8,7 @@ pipeline {
         CLUSTER_NAME = credentials('cluster_name')
         CLUSTER_ZONE = credentials('cluster_zone')
         REPO_PATH = credentials('repo_path')
+        GCLOUD_PATH = "/var/jenkins_home/google-cloud-sdk/bin"
     }
     stages {
         stage('Test') {
@@ -29,6 +30,7 @@ pipeline {
                 dir('BinaryCalculatorWebapp') {
                     withCredentials([file(credentialsId: 'service_account', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
                         sh '''
+                            export PATH=$PATH:$GCLOUD_PATH
                             gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
                             gcloud config set project $PROJECT_ID
                             gcloud builds submit --tag ${REPO_PATH}/binarycalculator:latest .
@@ -41,6 +43,7 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'service_account', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
                     sh '''
+                        export PATH=$PATH:$GCLOUD_PATH
                         gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
                         gcloud config set project $PROJECT_ID
                         gcloud container clusters get-credentials $CLUSTER_NAME --zone $CLUSTER_ZONE --project $PROJECT_ID
@@ -54,6 +57,7 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'service_account', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
                     sh '''
+                        export PATH=$PATH:$GCLOUD_PATH
                         gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
                         gcloud config set project $PROJECT_ID
                         gcloud container clusters get-credentials $CLUSTER_NAME --zone $CLUSTER_ZONE --project $PROJECT_ID
